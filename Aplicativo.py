@@ -3,10 +3,11 @@ import sidrapy
 import streamlit as st
 from datetime import datetime
 import plotly.graph_objects as go
-
-
+from Creditos.Credito import display_credits
 
 st.set_page_config(page_title='Pesquisa Trimestral do Leite - IBGE', page_icon='🐄', layout='wide')
+
+
 
 with st.container(): # Extração, manipulação e limpeza dos dados.
 
@@ -23,35 +24,124 @@ with st.container(): # Extração, manipulação e limpeza dos dados.
         df['DATA'] = pd.to_datetime(df['Trimestre (Código)'].str.slice(0,4) + '-' + df['Trimestre (Código)'].str.slice(4,6))
         df = df.drop(columns='Trimestre (Código)')
         df = df.rename(columns={'Unidade da Federação':'UF', 'Valor':'VALOR'})[['DATA','UF','VALOR']]
-        df['VALOR'] = pd.to_numeric(df['VALOR'], errors='coerce').fillna(0).astype(int)
-        df['UF'] = df['UF'].astype('string')
+        df['VALOR'] = pd.to_numeric(df['VALOR'], errors='coerce').fillna(0).astype(float)
+        df['UF'] = df['UF'].astype('string')    
 
         hora_consulta = datetime.now().strftime('%d/%m/%Y - %H:%M')
 
         return df, hora_consulta
     
     df, hora_consulta = load_data()
-    
-with st.container(): # Títulos
 
-    st.subheader('Pesquisa Trimestral do Leite- IBGE')
+    ranking_estados = df.sort_values('DATA').groupby('UF').tail(1).sort_values('VALOR', ascending=False).reset_index(drop=True)
+    
+with st.container(): # SIDEBAR
+
+    st.sidebar.title('FILTROS: 📋')
+    st.sidebar.write('---')
+
+
+    uf = st.sidebar.selectbox('Selecione o ESTADO:', ['Brasil'] + sorted(df['UF'].unique()))
+
+    if uf != 'Brasil':
+        df = df[df['UF'] == uf].reset_index(drop=True)
+    else:
+        df = df.groupby('DATA', as_index=False)['VALOR'].sum().reset_index(drop=True)
+
+with st.container(): # TÍTULOS
+
+    st.title('Pesquisa Trimestral do Leite 🐄')
+    st.write('---')
     st.info(f"Fonte: IBGE - Consultado em {hora_consulta}")
+    st.subheader(f'Produção de Leite Industrializado - {uf}')
 
-with st.container(): # Sidebar
+with st.container(): # FORMATAÇÃO DE VALORES
 
-    st.sidebar.subheader('Filtros')
+    def format_value(value):
+        if value >= 1_000_000_000:
+            return f"{value / 1_000_000_000:.2f}B"
+        elif value >= 1_000_000:
+            return f"{value / 1_000_000:.2f}M"
+        elif value >= 1_000:
+            return f"{value / 1_000:,.2f} Mil"
+        else:
+            return f"{value:.0f}"
+        
+with st.container(): # METRICAS 
+        
+    col1, col2, col3, col4 = st.columns(4)
+        
+    ano_atual = df['DATA'].dt.year.values[-1]
+    ano_anterior = ano_atual - 1
 
-    todas_uf = pd.Series(df['UF'].unique()).sort_values().tolist()
-    uf_selecionada = st.sidebar.multiselect('UF:', todas_uf)
+    mes_atual = df['DATA'].dt.month.values[-1]
+    mes_anterior = mes_atual - 1
+    porcentagem_diff_mes = (df[df['DATA'].dt.month == mes_atual]['VALOR'].sum() / df[df['DATA'].dt.month == mes_anterior]['VALOR'].sum() - 1) * 100
 
-    if not uf_selecionada:
-        st.warning('Selecione pelo menos uma UF.')
-        st.stop()
+    ano_atual_mes_atual = df[(df['DATA'].dt.year == ano_atual) & (df['DATA'].dt.month <= mes_atual)]['VALOR'].sum()
+    ano_passado_mes_atual = df[(df['DATA'].dt.year == ano_anterior) & (df['DATA'].dt.month <= mes_atual)]['VALOR'].sum()
+    porcentagem_diff_ano_mes = (ano_atual_mes_atual / ano_passado_mes_atual - 1) * 100
+
+    ultimos_5_trimestres = df[df['DATA'] >= (df['DATA'].max() - pd.DateOffset(months=12))]
+    ultimos_5_trimestres_anterior = df[(df['DATA'] < (df['DATA'].max() - pd.DateOffset(months=12))) & (df['DATA'] >= (df['DATA'].max() - pd.DateOffset(months=25)))]
+    porcentagem_diff_ultimos_5_trimestres = (ultimos_5_trimestres['VALOR'].mean() / ultimos_5_trimestres_anterior['VALOR'].mean() - 1) * 100
+
+    with col1:
+        st.metric(label='Produção Total', value=format_value(df['VALOR'].sum()))
+    with col2:
+        st.metric(label='Produção Média dos últimos 5 trimestres', value=format_value(ultimos_5_trimestres['VALOR'].mean()), delta=f"{porcentagem_diff_ultimos_5_trimestres:.2f}% Variação")
+    with col3:
+        st.metric(label=f'Produção Total {ano_atual} até o {mes_atual}°T', value=format_value(df[df['DATA'].dt.year == ano_atual]['VALOR'].sum()), delta=f"{porcentagem_diff_ano_mes:.2f}% Variação: {ano_anterior} até o {mes_atual}°T")
+    with col4:
+        st.metric(label=f'Produção do {ano_atual}-{mes_atual}°T', value=format_value(df['VALOR'].tail(1).sum()), delta=f"{porcentagem_diff_mes:.2f}% Variação Trimestre anterior")
+
+with st.container(): # GŔAFICO
+
+    media_movel_simples = df['VALOR'].rolling(window=3).mean()
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df['DATA'], y=media_movel_simples, mode='lines', name='Média Móvel Simples'))
+    fig.update_layout(title=f'Série histórica do Leite Industrializado', template='plotly_dark')
+    st.plotly_chart(fig)
+
+with st.container(): # EXPANDER
+
+    df_tabular = df.copy()
+    with st.expander(f'VISUALIZAR SÉRIE HISTÓRICA -- {uf.upper()}'):
+
+        st.data_editor(
+            df_tabular,
+            column_config={
+                "VALOR": st.column_config.ProgressColumn(
+                    "VALOR",
+                    format="%f",
+                    min_value=0,
+                    max_value=df['VALOR'].max(),
+                ),
+            },
+            hide_index=True,
+            use_container_width=True
+        )
+
+with st.container(): # RANKING
+        
+        st.write('---')
     
-    df_filtrado = df[df['UF'].isin(uf_selecionada)].copy().sort_values(by='DATA', ascending=False).reset_index(drop=True)
-    st.write(df_filtrado)
+        st.subheader('Ranking dos Estados por Produção de Leite Industrializado')
+        # ranking_estados['VALOR'] = ranking_estados['VALOR'].astype(float)
 
+        st.data_editor(
+            ranking_estados,
+            column_config={
+                "VALOR": st.column_config.ProgressColumn(
+                    "VALOR",
+                    format="%f",
+                    min_value=0,
+                    max_value=ranking_estados['VALOR'].values[0],
+                ),
+            },
+            hide_index=True,
+            use_container_width=True
+        )
 
-
-
-
+with st.sidebar:
+    display_credits()
