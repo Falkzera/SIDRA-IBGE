@@ -29,11 +29,11 @@ Antes de iniciar, identifique o código da tabela e variáveis que deseja extrai
 import pandas as pd
 import sidrapy
 
-base = get_table(table_code=table_code, 
-                 territorial_level=territorial_level,
-                 ibge_territorial_code=ibge_territorial_code,
-                 variable=variable,
-                 period=period)
+base = get_table(table_code="1086", 
+                 territorial_level="3",
+                 ibge_territorial_code="all",
+                 variable="283",
+                 period="all")
 
 
 print(df.head())
@@ -43,7 +43,7 @@ print(df.head())
 
 - **table_code**: Código da tabela no Sidra (e.g., “1086” para leite).
 - **territorial_level**: Nível territorial (1 para Brasil, 3 para Estados).
-- **ibge_territorial_code**: Código do IBGE para estados (e.g., “27” para Alagoas).
+- **ibge_territorial_code**: Código do IBGE para estados (e.g., “all" para selecionar todos).
 - **variable**: Código da variável (e.g., “283” para quantidade de leite cru).
 - **period**: Período (use “all” para todos os períodos ou um específico, como “202402” para 2º trimestre de 2024).
 
@@ -53,8 +53,14 @@ print(df.head())
 
 Com os dados extraídos no DataFrame, você pode realizar várias operações de análise e visualização.
 Caso precise de um tutorial, acesse meu Medium, escrevi uma matéria lá.
-- [Documentação Sidrapy](https://medium.com/@falkzera)
+- [Documentação Sidrapy](https://medium.com/@falkzera/extra%C3%A7%C3%A3o-de-dados-do-sidra-com-python-40fd7d3a0ff5)
 
+
+---
+
+## 🚀 Acesse o DashBoard, atualizado em tempo real
+
+- [DashBoard](https://pesquisa-trimestral-leite.streamlit.app/)
 
 ---
 
