@@ -1,6 +1,7 @@
 import pandas as pd
 import sidrapy
 import streamlit as st
+import numpy as np
 from datetime import datetime
 import plotly.graph_objects as go
 from Creditos.Credito import display_credits
@@ -34,7 +35,25 @@ with st.container(): # Extração, manipulação e limpeza dos dados.
     df, hora_consulta = load_data()
 
     ranking_estados = df.sort_values('DATA').groupby('UF').tail(1).sort_values('VALOR', ascending=False).reset_index(drop=True)
-    
+
+
+
+
+
+# todas_ufs = df['UF'].unique()
+
+# fig = go.Figure()
+
+# for uf in todas_ufs:
+#     df_filtrado = df[df['UF'] == uf]
+#     media_movel_simples = df_filtrado['VALOR'].rolling(window=3).mean()
+#     fig.add_trace(go.Scatter(x=df_filtrado['DATA'], y=media_movel_simples, mode='lines', name=f'{uf}'))
+
+# fig.update_layout(title='Série histórica do Leite Industrializado - Todas as UFs', template='plotly_dark')
+# st.plotly_chart(fig)
+
+
+
 with st.container(): # SIDEBAR
 
     st.sidebar.title('FILTROS: 📋')
@@ -142,6 +161,63 @@ with st.container(): # RANKING
             hide_index=True,
             use_container_width=True
         )
+
+
+with st.container(): # Gráfico top 6
+
+    # grafico de barras com ranking estados (apenas os 6 primeiros)
+    top_6_estados = ranking_estados.head(6)
+    fig_bar = go.Figure(go.Bar(
+        x=top_6_estados['UF'],
+        y=top_6_estados['VALOR'],
+        text=top_6_estados['VALOR'],
+        textposition='auto'
+    ))
+
+    fig_bar.update_layout(
+        title='Ranking dos Estados por Produção de Leite Industrializado (Top 6)',
+        xaxis_title='Estado',
+        yaxis_title='Produção de Leite',
+        template='plotly_dark'
+    )
+
+    st.plotly_chart(fig_bar)
+    # Adicionando linha de tendência e anotação ao gráfico de barras
+
+    # Calculando a linha de tendência
+    z = np.polyfit(range(len(top_6_estados)), top_6_estados['VALOR'], 1)
+    p = np.poly1d(z)
+
+    # Adicionando a linha de tendência ao gráfico de barras
+    fig_bar.add_trace(go.Scatter(
+        x=top_6_estados['UF'],
+        y=p(range(len(top_6_estados))),
+        mode='lines',
+        name='Tendência',
+        line=dict(color='firebrick', width=2, dash='dash')
+    ))
+
+    # Adicionando anotações para destacar a diferença entre os estados
+    for i, row in top_6_estados.iterrows():
+        fig_bar.add_annotation(
+            x=row['UF'],
+            y=row['VALOR'],
+            text=f"{row['VALOR']:.2f}",
+            showarrow=True,
+            arrowhead=2,
+            ax=0,
+            ay=-40
+        )
+
+    # Atualizando o layout do gráfico
+    fig_bar.update_layout(
+        title='Ranking dos Estados por Produção de Leite Industrializado (Top 6) com Linha de Tendência',
+        xaxis_title='Estado',
+        yaxis_title='Produção de Leite',
+        template='plotly_dark'
+    )
+
+    st.plotly_chart(fig_bar)
 
 with st.sidebar:
     display_credits()
